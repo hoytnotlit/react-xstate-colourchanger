@@ -10,6 +10,8 @@ function listen(): Action<SDSContext, SDSEvent> {
 }
 
 const grammar: { [index: string]: { person?: string, day?: string, time?: string } } = {
+    // TODO extend grammar
+    "Anna": { person: "Anna Appleseed" },
     "John": { person: "John Appleseed" },
     "on Friday": { day: "Friday" },
     "at ten": { time: "10:00" },
@@ -40,6 +42,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     target: "day"
 
                 },
+                // TODO add condition to go to state nomatch if the person is not recognised
                 { target: ".nomatch" }]
             },
             states: {
@@ -58,6 +61,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         },
         day: {
             initial: "prompt",
+            // TODO change this state
             on: { ENDSPEECH: "init" },
             states: {
                 prompt: {
@@ -68,5 +72,6 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 },
             }
         }
+        // TODO add missing states!
     }
 })
