@@ -1,4 +1,5 @@
 import { MachineConfig, send, Action, assign } from "xstate";
+import { respond } from "xstate/lib/actions";
 
 
 function say(text: string): Action<SDSContext, SDSEvent> {
@@ -9,16 +10,31 @@ function listen(): Action<SDSContext, SDSEvent> {
     return send('LISTEN')
 }
 
-const grammar: { [index: string]: { person?: string, day?: string, time?: string } } = {
+function resolveYes(recResult: string): boolean {
+    return recResult === 'yes' || (grammar[recResult] && grammar[recResult].affirmation == "yes")
+}
+
+function resolveNo(recResult: string): boolean {
+    return recResult === 'no' || (grammar[recResult] && grammar[recResult].affirmation == "no")
+}
+
+const grammar: { [index: string]: { person?: string, day?: string, time?: string, affirmation?: string } } = {
     // TODO extend grammar
     "Anna": { person: "Anna Appleseed" },
     "John": { person: "John Appleseed" },
+    "Patricia": { person: "Patricia G" },
     "on Friday": { day: "Friday" },
     "at ten": { time: "10:00" },
+    "at 10": { time: "10:00" },
+    "eleven": { time: "11:00" },
+    "of course": { affirmation: "yes" },
+    "absolutely": { affirmation: "yes" },
+    "no way": { affirmation: "no" },
+    "not really": { affirmation: "no" }
 }
 
-
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
+    //add on cancel event
     initial: 'init',
     states: {
         init: {
@@ -89,9 +105,10 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             initial: "prompt",
             on: {
                 RECOGNISED: [
-                    { target: 'confirmDay', cond: (context) => context.recResult === 'yes' },
-                    { target: 'time', cond: (context) => context.recResult === 'no' },
-                    // { target: 'confirm' }
+                    // TODO function checkYes
+                    { target: 'confirmDay', cond: (context) => resolveYes(context.recResult) },
+                    { target: 'time', cond: (context) => resolveNo(context.recResult) },
+                    { target: '.prompt' }
                 ]
             },
             states: {
@@ -115,8 +132,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     actions: assign((context) => { return { time: grammar[context.recResult].time } }),
                     target: "confirmTime"
                 },
-                { target: "prompt" }
-                ]
+                { target: ".nomatch" }]
             },
             states: {
                 prompt: {
@@ -125,6 +141,10 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 },
                 ask: {
                     entry: listen()
+                },
+                nomatch: {
+                    entry: say("Sorry I did not understand that"),
+                    on: { ENDSPEECH: "prompt" }
                 }
             }
         },
@@ -132,34 +152,49 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             initial: "prompt",
             on: {
                 RECOGNISED: [
-                    { target: 'final', cond: (context) => context.recResult === 'yes' },
-                    { target: 'welcome' }]
+                    { target: 'final', cond: (context) => resolveYes(context.recResult) },
+                    { target: 'welcome', cond: (context) => resolveNo(context.recResult) }]
                 // TODO infinite loop if you want to cancel booking
             },
             states: {
                 prompt: {
                     entry: send((context) => ({
                         type: "SPEAK",
-                        value: `Do you want me to create an appointment with ${context.person} on ${context.person} for the whole day?`
-                    }))
+                        value: `Do you want me to create an appointment with ${context.person} on ${context.day} for the whole day?`
+                    })),
+                    on: { ENDSPEECH: "ask" }
                 },
+                ask: {
+                    entry: listen()
+                }
             }
         },
         confirmTime: {
             initial: "prompt",
             on: {
                 RECOGNISED: [
-                    { target: 'final', cond: (context) => context.recResult === 'yes' },
-                    { target: 'welcome' }]
+                    { target: 'final', cond: (context) => resolveYes(context.recResult) },
+                    { target: 'welcome', cond: (context) => resolveNo(context.recResult) },
+                    { target: '.nomatch' }
+                ]
                 // TODO infinite loop if you want to cancel booking
             },
             states: {
                 prompt: {
                     entry: send((context) => ({
                         type: "SPEAK",
-                        value: `Do you want me to create an appointment with ${context.person} on ${context.person} at ${context.time}?`
-                    }))
+                        value: `Do you want me to create an appointment with ${context.person} on ${context.day} at ${context.time}?`
+                    })),
+                    on: { ENDSPEECH: "ask" }
                 },
+                //TODO can ask be generalized?
+                ask: {
+                    entry: listen()
+                },
+                nomatch: {
+                    entry: say("Was that a yes or a no?"),
+                    on: { ENDSPEECH: "ask" }
+                }
             }
         },
         final: {
@@ -167,11 +202,8 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             on: { ENDSPEECH: "init" },
             states: {
                 prompt: {
-                    entry: send((context) => ({
-                        type: "SPEAK",
-                        value: `Your appointment has been created!`
-                    }))
-                },
+                    entry: say("Your appointment has been created!")
+                }
             }
         },
     }
