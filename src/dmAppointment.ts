@@ -37,12 +37,10 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             initial: "prompt",
             on: {
                 RECOGNISED: [{
-                    cond: (context) => grammar[context.recResult].person !== undefined,
+                    cond: (context) => "person" in (grammar[context.recResult] || {}),
                     actions: assign((context) => { return { person: grammar[context.recResult].person } }),
                     target: "day"
-
                 },
-                // TODO add condition to go to state nomatch if the person is not recognised
                 { target: ".nomatch" }]
             },
             states: {
@@ -61,17 +59,120 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         },
         day: {
             initial: "prompt",
-            // TODO change this state
-            on: { ENDSPEECH: "init" },
+            on: {
+                RECOGNISED: [{
+                    cond: (context) => "day" in (grammar[context.recResult] || {}),
+                    actions: assign((context) => { return { day: grammar[context.recResult].day } }),
+                    target: "duration"
+                },
+                { target: ".nomatch" }]
+            },
             states: {
                 prompt: {
                     entry: send((context) => ({
                         type: "SPEAK",
                         value: `OK. ${context.person}. On which day is your meeting?`
+                    })),
+                    on: { ENDSPEECH: "ask" }
+                },
+                ask: {
+                    entry: listen()
+                },
+                nomatch: {
+                    entry: say("Sorry can you repeat the day please?"),
+                    on: { ENDSPEECH: "ask" }
+                }
+            }
+        },
+        // TODO add missing states!
+        duration: {
+            initial: "prompt",
+            on: {
+                RECOGNISED: [
+                    { target: 'confirmDay', cond: (context) => context.recResult === 'yes' },
+                    { target: 'time', cond: (context) => context.recResult === 'no' },
+                    // { target: 'confirm' }
+                ]
+            },
+            states: {
+                prompt: {
+                    entry: send((context) => ({
+                        type: "SPEAK",
+                        value: `Will it take the whole day?`
+                    })),
+                    on: { ENDSPEECH: "ask" }
+                },
+                ask: {
+                    entry: listen()
+                }
+            }
+        },
+        time: {
+            initial: "prompt",
+            on: {
+                RECOGNISED: [{
+                    cond: (context) => "time" in (grammar[context.recResult] || {}),
+                    actions: assign((context) => { return { time: grammar[context.recResult].time } }),
+                    target: "confirmTime"
+                },
+                { target: "prompt" }
+                ]
+            },
+            states: {
+                prompt: {
+                    entry: say("What time is your meeting?"),
+                    on: { ENDSPEECH: "ask" }
+                },
+                ask: {
+                    entry: listen()
+                }
+            }
+        },
+        confirmDay: {
+            initial: "prompt",
+            on: {
+                RECOGNISED: [
+                    { target: 'final', cond: (context) => context.recResult === 'yes' },
+                    { target: 'welcome' }]
+                // TODO infinite loop if you want to cancel booking
+            },
+            states: {
+                prompt: {
+                    entry: send((context) => ({
+                        type: "SPEAK",
+                        value: `Do you want me to create an appointment with ${context.person} on ${context.person} for the whole day?`
                     }))
                 },
             }
-        }
-        // TODO add missing states!
+        },
+        confirmTime: {
+            initial: "prompt",
+            on: {
+                RECOGNISED: [
+                    { target: 'final', cond: (context) => context.recResult === 'yes' },
+                    { target: 'welcome' }]
+                // TODO infinite loop if you want to cancel booking
+            },
+            states: {
+                prompt: {
+                    entry: send((context) => ({
+                        type: "SPEAK",
+                        value: `Do you want me to create an appointment with ${context.person} on ${context.person} at ${context.time}?`
+                    }))
+                },
+            }
+        },
+        final: {
+            initial: "prompt",
+            on: { ENDSPEECH: "init" },
+            states: {
+                prompt: {
+                    entry: send((context) => ({
+                        type: "SPEAK",
+                        value: `Your appointment has been created!`
+                    }))
+                },
+            }
+        },
     }
 })
