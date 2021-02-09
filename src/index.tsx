@@ -5,7 +5,8 @@ import { Machine, assign, send, State } from "xstate";
 import { useMachine, asEffect } from "@xstate/react";
 import { inspect } from "@xstate/inspect";
 // import { dmMachine } from "./dmColourChanger";
-import { dmMachine } from "./dmAppointment";
+// import { dmMachine } from "./dmAppointment";
+import { dmMachine } from "./dmPrompt";
 
 
 
@@ -147,7 +148,7 @@ function App() {
                 cancel()
             })
             /* speak: asEffect((context) => {
-	     * console.log('Speaking...');
+         * console.log('Speaking...');
              *     speak({text: context.ttsAgenda })
              * } */
         }

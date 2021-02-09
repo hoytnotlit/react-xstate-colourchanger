@@ -35,7 +35,7 @@ const grammar: { [index: string]: { person?: string, day?: string, time?: string
 
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     //add on cancel event
-    initial: 'init',
+    initial: 'welcome',
     states: {
         init: {
             on: {
