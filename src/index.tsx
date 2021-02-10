@@ -125,7 +125,7 @@ function App() {
         devTools: true,
         actions: {
             recStart: asEffect(() => {
-                console.log('Ready to receive a color command.');
+                console.log('Ready to receive a command.');
                 listen({
                     interimResults: false,
                     continuous: true
@@ -167,14 +167,20 @@ function App() {
 /* RASA API
  *  */
 const proxyurl = "https://cors-anywhere.herokuapp.com/";
-const rasaurl = 'https://rasa-nlu-api-00.herokuapp.com/model/parse'
-const nluRequest = (text: string) =>
+const rasaurl = 'https://gussuvmi-rasa-nlu.herokuapp.com/model/parse'
+// const rasaurl = 'https://rasa-nlu-api-00.herokuapp.com/model/parse'
+export const nluRequest = (text: string) =>
     fetch(new Request(proxyurl + rasaurl, {
         method: 'POST',
-        headers: { 'Origin': 'http://maraev.me' }, // only required with proxy
+        headers: {
+            'Origin': 'http://localhost:3000' //'http://maraev.me'
+        }, // only required with proxy
         body: `{"text": "${text}"}`
     }))
         .then(data => data.json());
+
+
+
 
 const rootElement = document.getElementById("root");
 ReactDOM.render(

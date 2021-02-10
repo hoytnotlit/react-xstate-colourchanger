@@ -113,10 +113,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             },
             states: {
                 prompt: {
-                    entry: send((context) => ({
-                        type: "SPEAK",
-                        value: `Will it take the whole day?`
-                    })),
+                    entry: say("Will it take the whole day?"),
                     on: { ENDSPEECH: "ask" }
                 },
                 ask: {
@@ -199,7 +196,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         },
         final: {
             initial: "prompt",
-            on: { ENDSPEECH: "init" },
+            on: { ENDSPEECH: "#main.init" },
             states: {
                 prompt: {
                     entry: say("Your appointment has been created!")

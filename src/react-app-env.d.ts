@@ -8,8 +8,7 @@ interface SDSContext {
     ttsAgenda: string;
     person: string,
     day: string,
-    time: string,
-
+    time: string
 }
 
 type SDSEvent =

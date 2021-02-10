@@ -1,5 +1,6 @@
-import { MachineConfig, send, Action } from "xstate";
-import { dmMachine as dmAppointment } from "./dmAppointment";
+import { MachineConfig, send, Action, assign } from "xstate";
+import { dmMachine as dmAppointmentMachine } from "./dmAppointment";
+import { nluRequest } from "./index"
 
 
 const sayColour: Action<SDSContext, SDSEvent> = send((context: SDSContext) => ({
@@ -11,6 +12,7 @@ function say(text: string): Action<SDSContext, SDSEvent> {
 }
 
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
+    id: "main",
     initial: 'init',
     states: {
         init: {
@@ -21,12 +23,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         welcome: {
             initial: "prompt",
             on: {
-                RECOGNISED: [
-                    { target: 'appointment', cond: (context) => context.recResult.toLowerCase() == "appointment" },
-                    { target: 'todoitem', cond: (context) => context.recResult.toLowerCase() == "to-do item" },
-                    { target: 'timer', cond: (context) => context.recResult.toLowerCase() == "timer" },
-                    { target: 'init' }
-                ]
+                RECOGNISED: { target: 'query' }
             },
             states: {
                 prompt: {
@@ -38,11 +35,57 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 }
             }
         },
+        query: {
+            invoke: {
+                id: 'nlu',
+                src: (context, event) => nluRequest(context.recResult),
+                onDone: {
+                    target: 'answer',
+                    actions: assign((context, event) => { return { nluData: event.data } })
+                },
+                onError: {
+                    target: 'unknown',
+                    actions: (context, event) => console.log(event.data),
+                }
+            }
+        },
+        answer: {
+            initial: "prompt",
+            on: {
+                ENDSPEECH: [
+                    { target: 'appointment', cond: (context) => context.nluData.intent.name.toLowerCase() == "appointment" },
+                    { target: 'todoitem', cond: (context) => context.nluData.intent.name.toLowerCase() == "todo_item" },
+                    { target: 'timer', cond: (context) => context.nluData.intent.name.toLowerCase() == "timer" },
+                    { target: 'unknown' }
+                ]
+            },
+            //TODO get rid of this
+            states: {
+                prompt: {
+                    entry: send((context) => ({
+                        type: "SPEAK",
+                        value: `intent is ${context.nluData.intent.name}`
+                    }))
+                }
+            }
+        },
+        unknown: {
+            initial: "prompt",
+            on: {
+                ENDSPEECH: { target: 'welcome' }
+            },
+            states: {
+                prompt: {
+                    entry: say("I did not understand that.")
+                }
+            }
+        },
         appointment: {
-            ...dmAppointment
+            ...dmAppointmentMachine
         },
         todoitem: {
             initial: "welcome",
+            on: { ENDSPEECH: "init" },
             states: {
                 welcome: {
                     entry: say("Let's create an item for your to-do list")
@@ -51,6 +94,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         },
         timer: {
             initial: "welcome",
+            on: { ENDSPEECH: "init" },
             states: {
                 welcome: {
                     entry: say("Let's set a timer")
