@@ -2,6 +2,8 @@ import { MachineConfig, send, Action, assign } from "xstate";
 import { dmMachine as dmAppointmentMachine } from "./dmAppointment";
 import { nluRequest } from "./index"
 
+const confidence_threshold = 0.9;
+const recognized_intents = ["appointment", "timer", "todo_item"];
 
 function say(text: string): Action<SDSContext, SDSEvent> {
     return send((_context: SDSContext) => ({ type: "SPEAK", value: text }))
@@ -10,6 +12,9 @@ function say(text: string): Action<SDSContext, SDSEvent> {
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     id: "main",
     initial: 'init',
+    on: {
+        RECOGNISED: { target: '.init', cond: (context) => context.recResult == "stop" }
+    },
     states: {
         init: {
             on: {
@@ -34,9 +39,9 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         query: {
             on: {
                 DONE: [
-                    { target: 'appointment', cond: (context) => context.nluData.intent.name.toLowerCase() == "appointment" },
-                    { target: 'todoitem', cond: (context) => context.nluData.intent.name.toLowerCase() == "todo_item" },
-                    { target: 'timer', cond: (context) => context.nluData.intent.name.toLowerCase() == "timer" },
+                    { target: 'confirm', cond: (context) => recognized_intents.indexOf(context.nluData.intent.name.toLowerCase()) > -1 && context.nluData.intent.confidence <= confidence_threshold },
+                    { target: 'redirect', cond: (context) => recognized_intents.indexOf(context.nluData.intent.name.toLowerCase()) > -1 && context.nluData.intent.confidence > confidence_threshold },
+                    { target: 'stop', cond: (context) => context.recResult === 'stop' },
                     { target: 'unknown' }
                 ]
             },
@@ -53,6 +58,34 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 }
             }
         },
+        confirm: {
+            initial: "prompt",
+            on: {
+                RECOGNISED: [
+                    { target: "redirect", cond: (context) => context.recResult == "yes" },
+                    { target: "welcome" }]
+            },
+            states: {
+                prompt: {
+                    entry: send((context) => ({
+                        type: "SPEAK",
+                        value: `Did you choose ${context.nluData.intent.name}?`
+                    })),
+                    on: { ENDSPEECH: "ask" }
+                },
+                ask: {
+                    entry: send('LISTEN')
+                }
+            }
+        },
+        redirect: {
+            always: [
+                { target: 'appointment', cond: (context) => context.nluData.intent.name.toLowerCase() == "appointment" },
+                { target: 'todoitem', cond: (context) => context.nluData.intent.name.toLowerCase() == "todo_item" },
+                { target: 'timer', cond: (context) => context.nluData.intent.name.toLowerCase() == "timer" },
+                { target: 'stop', cond: (context) => context.recResult === 'stop' }
+            ],
+        },
         unknown: {
             initial: "prompt",
             on: {
@@ -60,7 +93,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             },
             states: {
                 prompt: {
-                    entry: say("I did not understand that.")
+                    entry: say("I did not understand that. I can create and appointment, set a timer or add an item to your to-do list for you.")
                 }
             }
         },
@@ -85,5 +118,9 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 }
             }
         },
+        stop: {
+            entry: say("Ok"),
+            always: 'init'
+        }
     }
 })

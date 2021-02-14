@@ -60,6 +60,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     actions: assign((context) => { return { person: grammar[context.recResult].person } }),
                     target: "day"
                 },
+                { target: '#main.stop', cond: (context) => context.recResult === 'stop' },
                 { target: ".nomatch" }]
             },
             states: {
@@ -84,6 +85,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     actions: assign((context) => { return { day: grammar[context.recResult].day } }),
                     target: "duration"
                 },
+                { target: '#main.stop', cond: (context) => context.recResult === 'stop' },
                 { target: ".nomatch" }]
             },
             states: {
@@ -109,6 +111,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 RECOGNISED: [
                     { target: 'confirmDay', cond: (context) => resolveYes(context.recResult) },
                     { target: 'time', cond: (context) => resolveNo(context.recResult) },
+                    { target: '#main.stop', cond: (context) => context.recResult === 'stop' },
                     { target: '.prompt' }
                 ]
             },
@@ -130,6 +133,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     actions: assign((context) => { return { time: grammar[context.recResult].time } }),
                     target: "confirmTime"
                 },
+                { target: '#main.stop', cond: (context) => context.recResult === 'stop' },
                 { target: ".nomatch" }]
             },
             states: {
@@ -151,7 +155,8 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             on: {
                 RECOGNISED: [
                     { target: 'final', cond: (context) => resolveYes(context.recResult) },
-                    { target: 'welcome', cond: (context) => resolveNo(context.recResult) }]
+                    { target: 'welcome', cond: (context) => resolveNo(context.recResult) },
+                    { target: '#main.stop', cond: (context) => context.recResult === 'stop' }]
             },
             states: {
                 prompt: {
@@ -172,6 +177,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 RECOGNISED: [
                     { target: 'final', cond: (context) => resolveYes(context.recResult) },
                     { target: 'welcome', cond: (context) => resolveNo(context.recResult) },
+                    { target: '#main.stop', cond: (context) => context.recResult === 'stop' },
                     { target: '.nomatch' }
                 ]
             },
