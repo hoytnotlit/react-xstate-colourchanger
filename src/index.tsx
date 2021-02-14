@@ -163,12 +163,14 @@ function App() {
 /* RASA API
  *  */
 const proxyurl = "https://cors-anywhere.herokuapp.com/";
-const rasaurl = 'https://gussuvmi-rasa-nlu.herokuapp.com/model/parse'
+const rasaurl = 'https://gussuvmi-rasa-nlu.herokuapp.com/model/parse';
+const origin = location.origin;
+
 export const nluRequest = (text: string) =>
     fetch(new Request(proxyurl + rasaurl, {
         method: 'POST',
         headers: {
-            'Origin': 'http://localhost:3000' //'http://maraev.me'
+            'Origin': origin //'http://maraev.me'
         }, // only required with proxy
         body: `{"text": "${text}"}`
     }))
