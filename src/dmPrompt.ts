@@ -3,10 +3,6 @@ import { dmMachine as dmAppointmentMachine } from "./dmAppointment";
 import { nluRequest } from "./index"
 
 
-const sayColour: Action<SDSContext, SDSEvent> = send((context: SDSContext) => ({
-    type: "SPEAK", value: `Repainting to ${context.recResult}`
-}))
-
 function say(text: string): Action<SDSContext, SDSEvent> {
     return send((_context: SDSContext) => ({ type: "SPEAK", value: text }))
 }
@@ -36,36 +32,24 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             }
         },
         query: {
-            invoke: {
-                id: 'nlu',
-                src: (context, event) => nluRequest(context.recResult),
-                onDone: {
-                    target: 'answer',
-                    actions: assign((context, event) => { return { nluData: event.data } })
-                },
-                onError: {
-                    target: 'unknown',
-                    actions: (context, event) => console.log(event.data),
-                }
-            }
-        },
-        answer: {
-            initial: "prompt",
             on: {
-                ENDSPEECH: [
+                DONE: [
                     { target: 'appointment', cond: (context) => context.nluData.intent.name.toLowerCase() == "appointment" },
                     { target: 'todoitem', cond: (context) => context.nluData.intent.name.toLowerCase() == "todo_item" },
                     { target: 'timer', cond: (context) => context.nluData.intent.name.toLowerCase() == "timer" },
                     { target: 'unknown' }
                 ]
             },
-            //TODO get rid of this
-            states: {
-                prompt: {
-                    entry: send((context) => ({
-                        type: "SPEAK",
-                        value: `intent is ${context.nluData.intent.name}`
-                    }))
+            invoke: {
+                id: 'nlu',
+                src: (context, event) => nluRequest(context.recResult),
+                onDone: {
+                    actions: [assign((context, event) => { return { nluData: event.data } }),
+                    send('DONE')]
+                },
+                onError: {
+                    target: 'unknown',
+                    actions: (context, event) => console.log(event.data),
                 }
             }
         },

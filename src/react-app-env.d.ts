@@ -14,6 +14,7 @@ interface SDSContext {
 type SDSEvent =
     | { type: 'CLICK' }
     | { type: 'RECOGNISED' }
+    | { type: 'DONE' }
     | { type: 'ASRRESULT', value: string }
     | { type: 'ENDSPEECH' }
     | { type: 'LISTEN' }

@@ -1,5 +1,4 @@
 import { MachineConfig, send, Action, assign } from "xstate";
-import { respond } from "xstate/lib/actions";
 
 
 function say(text: string): Action<SDSContext, SDSEvent> {
@@ -19,14 +18,19 @@ function resolveNo(recResult: string): boolean {
 }
 
 const grammar: { [index: string]: { person?: string, day?: string, time?: string, affirmation?: string } } = {
-    // TODO extend grammar
     "Anna": { person: "Anna Appleseed" },
     "John": { person: "John Appleseed" },
     "Patricia": { person: "Patricia G" },
+    "Mary": { person: "Mary" },
+    "Mike": { person: "Michael" },
     "on Friday": { day: "Friday" },
+    "tomorrow": { day: "tomorrow" },
+    "Monday": { day: "Monday" },
     "at ten": { time: "10:00" },
     "at 10": { time: "10:00" },
     "eleven": { time: "11:00" },
+    "at noon": { time: "12:00" },
+    "at 3": { time: "15:00" },
     "of course": { affirmation: "yes" },
     "absolutely": { affirmation: "yes" },
     "no way": { affirmation: "no" },
@@ -34,7 +38,6 @@ const grammar: { [index: string]: { person?: string, day?: string, time?: string
 }
 
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
-    //add on cancel event
     initial: 'welcome',
     states: {
         init: {
@@ -100,12 +103,10 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 }
             }
         },
-        // TODO add missing states!
         duration: {
             initial: "prompt",
             on: {
                 RECOGNISED: [
-                    // TODO function checkYes
                     { target: 'confirmDay', cond: (context) => resolveYes(context.recResult) },
                     { target: 'time', cond: (context) => resolveNo(context.recResult) },
                     { target: '.prompt' }
@@ -151,7 +152,6 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 RECOGNISED: [
                     { target: 'final', cond: (context) => resolveYes(context.recResult) },
                     { target: 'welcome', cond: (context) => resolveNo(context.recResult) }]
-                // TODO infinite loop if you want to cancel booking
             },
             states: {
                 prompt: {
@@ -174,7 +174,6 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     { target: 'welcome', cond: (context) => resolveNo(context.recResult) },
                     { target: '.nomatch' }
                 ]
-                // TODO infinite loop if you want to cancel booking
             },
             states: {
                 prompt: {
@@ -184,7 +183,6 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     })),
                     on: { ENDSPEECH: "ask" }
                 },
-                //TODO can ask be generalized?
                 ask: {
                     entry: listen()
                 },
