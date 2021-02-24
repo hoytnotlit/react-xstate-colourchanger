@@ -8,7 +8,8 @@ interface SDSContext {
     ttsAgenda: string;
     person: string,
     day: string,
-    time: string
+    time: string,
+    smarthome_action: any
 }
 
 type SDSEvent =

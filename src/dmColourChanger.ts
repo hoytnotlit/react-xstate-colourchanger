@@ -3,10 +3,10 @@ import { MachineConfig, send, Action } from "xstate";
 // SRGS parser and example (logs the results to console on page load)
 import { loadGrammar } from './runparser'
 import { parse } from './chartparser'
-import { grammar } from './grammars/pizzaGrammar'
+import { grammar } from './grammars/quoteGrammar'
 
 const gram = loadGrammar(grammar)
-const input = "I would like a coca cola and three large pizzas with pepperoni and mushrooms"
+const input = "to do is to be"
 const prs = parse(input.split(/\s+/), gram)
 const result = prs.resultsForRule(gram.$root)[0]
 
