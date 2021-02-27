@@ -81,7 +81,16 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         },
                         ...getDefaultActions("Tell me the name of the person."),
                         { target: ".nomatch" }],
-                        DONE: ".reprompt" 
+                        MAXSPEECH: [{
+                            actions: assign((context) => { return { prompts: context.prompts ? context.prompts + 1 : 1 } }),
+                            cond: (context) => !context.prompts || context.prompts < 3,
+                            target: ".reprompt"
+                        },
+                        {
+                            cond: (context) => context.prompts >= 3,
+                            target: "init"
+                        }
+                        ]
                     },
                     states: {
                         prompt: {

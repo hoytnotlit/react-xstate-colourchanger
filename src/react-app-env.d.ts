@@ -10,7 +10,8 @@ interface SDSContext {
     day: string,
     time: string,
     smarthome_action: any,
-    help_msg: string
+    help_msg: string,
+    prompts: number = 0 // TODO why initialising value not working??
 }
 
 type SDSEvent =
