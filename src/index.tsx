@@ -4,7 +4,7 @@ import * as ReactDOM from "react-dom";
 import { Machine, assign, send, State } from "xstate";
 import { useMachine, asEffect } from "@xstate/react";
 import { inspect } from "@xstate/inspect";
-import { dmMachine } from "./dmPrompt";
+import { dmMachine } from "./dmAppointmentPlus";
 
 inspect({
     url: "https://statecharts.io/inspect",

@@ -9,13 +9,15 @@ interface SDSContext {
     person: string,
     day: string,
     time: string,
-    smarthome_action: any
+    smarthome_action: any,
+    help_msg: string
 }
 
 type SDSEvent =
     | { type: 'CLICK' }
     | { type: 'RECOGNISED' }
     | { type: 'DONE' }
+    | { type: 'MAXSPEECH' }
     | { type: 'ASRRESULT', value: string }
     | { type: 'ENDSPEECH' }
     | { type: 'LISTEN' }
