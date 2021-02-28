@@ -2,12 +2,8 @@ export const grammar = `
 <grammar root="initial">
     <rule id="initial">
         <item repeat="0-1">please</item>
-        <!-- <ruleref uri="#action" />
-        the
-        <ruleref uri="#object" />
-        <ruleref uri="#onoff" /> -->
         <ruleref uri="#do" />
-        <!--todo stuff like open the air conditioning off is recognized-->
+        <!--NOTE stuff like turn off the air conditioning off (off/on before and after the object)-->
         <tag>out.object = rules.do.object;out.action=rules.do.action</tag>
     </rule>
     <rule id="do">
@@ -64,27 +60,5 @@ export const grammar = `
             </one-of>
         </item>
     </rule>
-
-    <!-- <rule id="object">
-        <one-of>
-            <item> light </item>
-            <item> heat </item>
-            <item> AC <tag> out = 'air conditioning'; </tag>
-            </item>
-            <item> air conditioning </item>
-            <item> window </item>
-            <item> door </item>
-        </one-of>
-    </rule>
-    <rule id="action">
-        <one-of>
-            <item> turn
-                <ruleref uri="#onoff" />
-                <tag> out = rules.onoff; </tag>
-            </item>
-            <item> open </item>
-            <item> close </item>
-        </one-of>
-    </rule> -->
 </grammar>
 `

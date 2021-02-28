@@ -99,7 +99,7 @@ const grammar: { [index: string]: { person?: string, day?: string, time?: string
     "not really": { affirmation: "no" }
 }
 
-// TODO write proper reprompts
+// TODO write proper reprompts, handle eg who are you meeting with ?? sorry I dont know them message
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     initial: 'act',
     states: {
@@ -167,7 +167,8 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             actions: assign((context) => { return { time: grammar[context.recResult].time } }),
                             target: "confirmTime",
                         },
-                        ...getDefaultRecogEvents("Tell me the time of your meeting.")]
+                        ...getDefaultRecogEvents("Tell me the time of your meeting.")],
+                        MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
                     ...getDefaultStates(say("What time is your meeting?"), "Wake up", "Sorry I did not understand that")
                 },
