@@ -1,10 +1,11 @@
 import "./styles.scss";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { Machine, assign, send, State } from "xstate";
+import { Machine, assign, actions, State } from "xstate";
 import { useMachine, asEffect } from "@xstate/react";
 import { inspect } from "@xstate/inspect";
 import { dmMachine } from "./dmAppointmentPlus";
+const { send, cancel } = actions;
 
 inspect({
     url: "https://statecharts.io/inspect",
@@ -43,7 +44,10 @@ const machine = Machine<SDSContext, any, SDSEvent>({
                                 assign((_context, event) => { return { recResult: event.value } })],
                             target: '.match'
                         },
-                        RECOGNISED: 'idle',
+                        RECOGNISED: {
+                            actions: [cancel('maxsp'), assign((context: SDSContext) => { return { prompts: 0 } })],
+                            target: 'idle'
+                        },
                         MAXSPEECH: 'idle'
                     },
                     states: {

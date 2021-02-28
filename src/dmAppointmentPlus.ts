@@ -1,5 +1,5 @@
-import { MachineConfig, send, Action, assign } from "xstate";
-
+import { MachineConfig, actions, Action, assign } from "xstate";
+const { send, cancel } = actions;
 
 function say(text: string): Action<SDSContext, SDSEvent> {
     return send((_context: SDSContext) => ({ type: "SPEAK", value: text }))
@@ -17,19 +17,66 @@ function resolveNo(recResult: string): boolean {
     return recResult === 'no' || (grammar[recResult] && grammar[recResult].affirmation == "no")
 }
 
-function getDefaultActions(help_msg: string) {
+function getDefaultRecogEvents(help_msg: string) {
     return [
         { target: '#root.dm.stop', cond: (context: SDSContext) => context.recResult === 'stop' },
         {
             cond: (context: SDSContext) => context.recResult === 'help',
-            actions: getAction(help_msg),
+            actions: getHelpAction(help_msg),
             target: '#root.dm.help'
+        },
+        { target: ".nomatch" }
+    ]
+}
+
+function getDefaultMaxSpeechEvents() {
+    return [
+        {
+            actions: getRepromptAction(),
+            cond: (context: SDSContext) => !context.prompts || context.prompts < 3,
+            target: ".reprompt"
+        },
+        {
+            actions: getClearRepromptAction(),
+            cond: (context: SDSContext) => context.prompts >= 3,
+            target: "init"
         }
     ]
 }
 
-function getAction(help_msg: string): any {
+function getHelpAction(help_msg: string): any {
     return assign((context) => { return { help_msg: help_msg } });
+}
+
+function getRepromptAction(): any {
+    return assign((context: SDSContext) => { return { prompts: context.prompts ? context.prompts + 1 : 1 } });
+}
+
+function getClearRepromptAction(): any {
+    return assign((context: SDSContext) => { return { prompts: 0 } });
+}
+
+function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: string, nomatch: string): MachineConfig<SDSContext, any, SDSEvent> {
+    return ({
+        initial: 'prompt',
+        states: {
+            prompt: {
+                entry: prompt,
+                on: { ENDSPEECH: "ask" }
+            },
+            reprompt: {
+                entry: say(reprompt),
+                on: { ENDSPEECH: "ask" }
+            },
+            ask: {
+                entry: [send('LISTEN'), send('MAXSPEECH', { delay: 3000, id: 'maxsp' })]
+            },
+            nomatch: {
+                entry: say(nomatch),
+                on: { ENDSPEECH: "ask" }
+            }
+        }
+    })
 }
 
 const grammar: { [index: string]: { person?: string, day?: string, time?: string, affirmation?: string } } = {
@@ -52,6 +99,7 @@ const grammar: { [index: string]: { person?: string, day?: string, time?: string
     "not really": { affirmation: "no" }
 }
 
+// TODO write proper reprompts
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     initial: 'act',
     states: {
@@ -72,166 +120,86 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     }
                 },
                 who: {
-                    initial: "prompt",
                     on: {
                         RECOGNISED: [{
                             cond: (context) => "person" in (grammar[context.recResult] || {}),
                             actions: assign((context) => { return { person: grammar[context.recResult].person } }),
                             target: "day"
                         },
-                        ...getDefaultActions("Tell me the name of the person."),
-                        { target: ".nomatch" }],
-                        MAXSPEECH: [{
-                            actions: assign((context) => { return { prompts: context.prompts ? context.prompts + 1 : 1 } }),
-                            cond: (context) => !context.prompts || context.prompts < 3,
-                            target: ".reprompt"
-                        },
-                        {
-                            cond: (context) => context.prompts >= 3,
-                            target: "init"
-                        }
-                        ]
+                        ...getDefaultRecogEvents("Tell me the name of the person.")],
+                        MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    states: {
-                        prompt: {
-                            entry: say("Who are you meeting with?"),
-                            on: { ENDSPEECH: "ask" }
-                        },
-                        reprompt: {
-                            entry: say("Wake up"),
-                            on: { ENDSPEECH: "ask" }
-                        },
-                        ask: {
-                            entry: [send('LISTEN'), send('MAXSPEECH', { delay: 3000 })]
-                            // entry: listen()
-                        },
-                        nomatch: {
-                            entry: say("Sorry I don't know them"),
-                            on: { ENDSPEECH: "prompt" }
-                        }
-                    }
+                    ...getDefaultStates(say("Who are you meeting with?"), "Wake up", "Sorry I don't know them")
                 },
                 day: {
-                    initial: "prompt",
                     on: {
                         RECOGNISED: [{
                             cond: (context) => "day" in (grammar[context.recResult] || {}),
                             actions: assign((context) => { return { day: grammar[context.recResult].day } }),
                             target: "duration"
                         },
-                        ...getDefaultActions("Tell me the day of the meeting."),
-                        { target: ".nomatch" }]
+                        ...getDefaultRecogEvents("Tell me the day of the meeting.")],
+                        MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    states: {
-                        prompt: {
-                            entry: send((context) => ({
-                                type: "SPEAK",
-                                value: `OK. ${context.person}. On which day is your meeting?`
-                            })),
-                            on: { ENDSPEECH: "ask" }
-                        },
-                        ask: {
-                            entry: listen()
-                        },
-                        nomatch: {
-                            entry: say("Sorry can you repeat the day please?"),
-                            on: { ENDSPEECH: "ask" }
-                        }
-                    }
+                    ...getDefaultStates(send((context) => ({
+                        type: "SPEAK",
+                        value: `OK. ${context.person}. On which day is your meeting?`
+                    })),
+                        "Halloo?", "Can you repeat the day please?")
                 },
                 duration: {
-                    initial: "prompt",
                     on: {
                         RECOGNISED: [
                             { target: 'confirmDay', cond: (context) => resolveYes(context.recResult) },
                             { target: 'time', cond: (context) => resolveNo(context.recResult) },
-                            ...getDefaultActions("Tell me yes or no."),
-                            { target: '.prompt' }
-                        ]
+                            ...getDefaultRecogEvents("Tell me yes or no."),
+                        ],
+                        MAXSPEECH: [...getDefaultMaxSpeechEvents()]
+                        // TODO why does the whole thing stop now when the maxsp event is missing??
+                        // > because maxsp event is triggered the idle state (listen stops working)
                     },
-                    states: {
-                        prompt: {
-                            entry: say("Will it take the whole day?"),
-                            on: { ENDSPEECH: "ask" }
-                        },
-                        ask: {
-                            entry: listen()
-                        }
-                    }
+                    ...getDefaultStates(say("Will it take the whole day?"), "Wake up", "Was that a yes or a no?")
                 },
                 time: {
-                    initial: "prompt",
                     on: {
                         RECOGNISED: [{
                             cond: (context) => "time" in (grammar[context.recResult] || {}),
                             actions: assign((context) => { return { time: grammar[context.recResult].time } }),
                             target: "confirmTime",
                         },
-                        ...getDefaultActions("Tell me the time of your meeting."),
-                        { target: ".nomatch" }]
+                        ...getDefaultRecogEvents("Tell me the time of your meeting.")]
                     },
-                    states: {
-                        prompt: {
-                            entry: say("What time is your meeting?"),
-                            on: { ENDSPEECH: "ask" }
-                        },
-                        ask: {
-                            entry: listen()
-                        },
-                        nomatch: {
-                            entry: say("Sorry I did not understand that"),
-                            on: { ENDSPEECH: "prompt" }
-                        }
-                    }
+                    ...getDefaultStates(say("What time is your meeting?"), "Wake up", "Sorry I did not understand that")
                 },
                 confirmDay: {
-                    initial: "prompt",
                     on: {
                         RECOGNISED: [
                             { target: 'final', cond: (context) => resolveYes(context.recResult) },
                             { target: 'welcome', cond: (context) => resolveNo(context.recResult) },
-                            ...getDefaultActions("Tell me yes or no.")
-                        ]
+                            ...getDefaultRecogEvents("Tell me yes or no.")
+                        ],
+                        MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    states: {
-                        prompt: {
-                            entry: send((context) => ({
-                                type: "SPEAK",
-                                value: `Do you want me to create an appointment with ${context.person} on ${context.day} for the whole day?`
-                            })),
-                            on: { ENDSPEECH: "ask" }
-                        },
-                        ask: {
-                            entry: listen()
-                        }
-                    }
+                    ...getDefaultStates(send((context) => ({
+                        type: "SPEAK",
+                        value: `Do you want me to create an appointment with ${context.person} on ${context.day} for the whole day?`
+                    })),
+                        "Halloo?", "Was that a yes or a no?")
                 },
                 confirmTime: {
-                    initial: "prompt",
                     on: {
                         RECOGNISED: [
                             { target: 'final', cond: (context) => resolveYes(context.recResult) },
                             { target: 'welcome', cond: (context) => resolveNo(context.recResult) },
-                            ...getDefaultActions("Tell me yes or no."),
-                            { target: '.nomatch' }
-                        ]
+                            ...getDefaultRecogEvents("Tell me yes or no.")
+                        ],
+                        MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    states: {
-                        prompt: {
-                            entry: send((context) => ({
-                                type: "SPEAK",
-                                value: `Do you want me to create an appointment with ${context.person} on ${context.day} at ${context.time}?`
-                            })),
-                            on: { ENDSPEECH: "ask" }
-                        },
-                        ask: {
-                            entry: listen()
-                        },
-                        nomatch: {
-                            entry: say("Was that a yes or a no?"),
-                            on: { ENDSPEECH: "ask" }
-                        }
-                    }
+                    ...getDefaultStates(send((context) => ({
+                        type: "SPEAK",
+                        value: `Do you want me to create an appointment with ${context.person} on ${context.day} at ${context.time}?`
+                    })),
+                        "Halloo?", "Was that a yes or a no?")
                 },
                 final: {
                     initial: "prompt",
@@ -243,10 +211,6 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     }
                 },
             }
-        },
-        maxspeech: {
-            entry: say("Sorry"),
-            on: { 'ENDSPEECH': 'act.hist' }
         },
         stop: {
             entry: say("Ok"),
