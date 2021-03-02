@@ -81,7 +81,8 @@ function getClearRepromptAction(): any {
     return assign((context: SDSContext) => { return { prompts: 0 } });
 }
 
-function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: string, nomatch: string): MachineConfig<SDSContext, any, SDSEvent> {
+function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: Action<SDSContext, SDSEvent>,
+    nomatch: string): MachineConfig<SDSContext, any, SDSEvent> {
     return ({
         initial: 'prompt',
         states: {
@@ -90,7 +91,7 @@ function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: string
                 on: { ENDSPEECH: "ask" }
             },
             reprompt: {
-                entry: say(reprompt),
+                entry: reprompt,
                 on: { ENDSPEECH: "ask" }
             },
             ask: {
@@ -128,7 +129,7 @@ const yesNoGrammar: { [index: string]: { person?: string, day?: string, time?: s
 // parallel states where one states asks the user an open ended question and the other "listens" to what
 // the user might say, ready to take on an action such as creating an appointment
 // This is not the best solution.
-// TODO write proper reprompts
+// I would extract the appointment-machine into its own file
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     // initial: 'act',
     type: 'parallel',
@@ -207,7 +208,9 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                                 RECOGNISED: [...getDefaultRecogEvents("Tell me the name of the person.")],
                                 MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                             },
-                            ...getDefaultStates(say("Who are you meeting with?"), "Wake up", "Sorry I don't know them")
+                            ...getDefaultStates(say("Who are you meeting with?"),
+                                say("Can you tell me who you are meeting with?"),
+                                "Sorry, I don't know them.")
                         },
                         redirect: {
                             always: [
@@ -227,7 +230,8 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                                 type: "SPEAK",
                                 value: `OK. ${context.person}. On which day is your meeting?`
                             })),
-                                "Halloo?", "Can you repeat the day please?")
+                                say("What day do you have your meeting?"),
+                                "Can you repeat that?")
                         },
                         duration: {
                             on: {
@@ -238,14 +242,18 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                                 ],
                                 MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                             },
-                            ...getDefaultStates(say("Will it take the whole day?"), "Wake up", "Was that a yes or a no?")
+                            ...getDefaultStates(say("Will it take the whole day?"),
+                                say("Is your meeting going to last the entire day?"),
+                                "I did not catch that.")
                         },
                         time: {
                             on: {
                                 RECOGNISED: [...getDefaultRecogEvents("Tell me the time of your meeting.")],
                                 MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                             },
-                            ...getDefaultStates(say("What time is your meeting?"), "Wake up", "Sorry I did not understand that")
+                            ...getDefaultStates(say("What time is your meeting?"),
+                                say("When does your meeting start?"),
+                                "Can you repeat that?")
                         },
                         confirmDay: {
                             on: {
@@ -256,11 +264,16 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                                 ],
                                 MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                             },
-                            ...getDefaultStates(send((context) => ({
-                                type: "SPEAK",
-                                value: `Do you want me to create an appointment with ${context.person} on ${context.day} for the whole day?`
-                            })),
-                                "Halloo?", "Was that a yes or a no?")
+                            ...getDefaultStates(
+                                send((context) => ({
+                                    type: "SPEAK",
+                                    value: `Do you want me to create an appointment with ${context.person} on ${context.day} for the whole day?`
+                                })),
+                                send((context) => ({
+                                    type: "SPEAK",
+                                    value: `You are meeting with ${context.person} on ${context.day} for the whole day. Is that correct?`
+                                })),
+                                "Yes or no?")
                         },
                         confirmTime: {
                             on: {
@@ -271,11 +284,16 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                                 ],
                                 MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                             },
-                            ...getDefaultStates(send((context) => ({
-                                type: "SPEAK",
-                                value: `Do you want me to create an appointment with ${context.person} on ${context.day} at ${context.time}?`
-                            })),
-                                "Halloo?", "Was that a yes or a no?")
+                            ...getDefaultStates(
+                                send((context) => ({
+                                    type: "SPEAK",
+                                    value: `Do you want me to create an appointment with ${context.person} on ${context.day} at ${context.time}?`
+                                })),
+                                send((context) => ({
+                                    type: "SPEAK",
+                                    value: `You are meeting with ${context.person} on ${context.day} at ${context.time}. Is that correct?`
+                                })),
+                                "Yes or a no?")
                         },
                         final: {
                             initial: "prompt",

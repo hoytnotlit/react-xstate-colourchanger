@@ -19,11 +19,11 @@ function resolveNo(recResult: string): boolean {
 
 function getDefaultRecogEvents(help_msg: string) {
     return [
-        { target: '#root.dm.stop', cond: (context: SDSContext) => context.recResult === 'stop' },
+        { target: '#appointment.stop', cond: (context: SDSContext) => context.recResult === 'stop' },
         {
             cond: (context: SDSContext) => context.recResult === 'help',
             actions: getHelpAction(help_msg),
-            target: '#root.dm.help'
+            target: '#appointment.help'
         },
         { target: ".nomatch" }
     ]
@@ -44,6 +44,33 @@ function getDefaultMaxSpeechEvents() {
     ]
 }
 
+function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: Action<SDSContext, SDSEvent>,
+    nomatch: string): MachineConfig<SDSContext, any, SDSEvent> {
+    return ({
+        initial: 'prompt',
+        states: {
+            prompt: {
+                entry: prompt,
+                on: { ENDSPEECH: "ask" }
+            },
+            reprompt: {
+                entry: reprompt,
+                on: { ENDSPEECH: "ask" }
+            },
+            ask: {
+                entry: [listen(), send('MAXSPEECH', { delay: 3000, id: 'maxsp' })]
+            },
+            nomatch: {
+                entry: say(nomatch),
+                on: { ENDSPEECH: "reprompt" }
+            }
+        }
+    })
+}
+
+// functions for getting assign-actions, my editor gives an error when the result is 
+// directly in the actions: ... part
+
 function getHelpAction(help_msg: string): any {
     return assign((context) => { return { help_msg: help_msg } });
 }
@@ -56,38 +83,17 @@ function getClearRepromptAction(): any {
     return assign((context: SDSContext) => { return { prompts: 0 } });
 }
 
-function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: string, nomatch: string): MachineConfig<SDSContext, any, SDSEvent> {
-    return ({
-        initial: 'prompt',
-        states: {
-            prompt: {
-                entry: prompt,
-                on: { ENDSPEECH: "ask" }
-            },
-            reprompt: {
-                entry: say(reprompt),
-                on: { ENDSPEECH: "ask" }
-            },
-            ask: {
-                entry: [send('LISTEN'), send('MAXSPEECH', { delay: 3000, id: 'maxsp' })]
-            },
-            nomatch: {
-                entry: say(nomatch),
-                on: { ENDSPEECH: "ask" }
-            }
-        }
-    })
-}
-
 const grammar: { [index: string]: { person?: string, day?: string, time?: string, affirmation?: string } } = {
     "Anna": { person: "Anna Appleseed" },
     "John": { person: "John Appleseed" },
     "Patricia": { person: "Patricia G" },
     "Mary": { person: "Mary" },
+    "Bob": { person: "Bob the Builder" },
     "Mike": { person: "Michael" },
     "on Friday": { day: "Friday" },
     "tomorrow": { day: "tomorrow" },
     "Monday": { day: "Monday" },
+    "10": { time: "10:00" },
     "at ten": { time: "10:00" },
     "at 10": { time: "10:00" },
     "eleven": { time: "11:00" },
@@ -99,12 +105,15 @@ const grammar: { [index: string]: { person?: string, day?: string, time?: string
     "not really": { affirmation: "no" }
 }
 
-// TODO write proper reprompts, handle eg who are you meeting with ?? sorry I dont know them message
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
+    id: 'appointment',
     initial: 'act',
     states: {
         act: {
             initial: 'init',
+            // NOTE use welcome as initial state if machine was imported in dmPrompt-machine
+            // currently dmAppointmentPlus is the "main" machine (imported in idex.tsx)
+            // initial: 'welcome',
             states: {
                 hist: { type: 'history', history: 'deep' },
                 init: {
@@ -129,7 +138,9 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         ...getDefaultRecogEvents("Tell me the name of the person.")],
                         MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    ...getDefaultStates(say("Who are you meeting with?"), "Wake up", "Sorry I don't know them")
+                    ...getDefaultStates(say("Who are you meeting with?"),
+                        say("Can you tell me who you are meeting with?"),
+                        "Sorry, I don't know them.")
                 },
                 day: {
                     on: {
@@ -145,7 +156,8 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         type: "SPEAK",
                         value: `OK. ${context.person}. On which day is your meeting?`
                     })),
-                        "Halloo?", "Can you repeat the day please?")
+                        say("What day do you have your meeting?"),
+                        "Can you repeat that?")
                 },
                 duration: {
                     on: {
@@ -155,10 +167,10 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             ...getDefaultRecogEvents("Tell me yes or no."),
                         ],
                         MAXSPEECH: [...getDefaultMaxSpeechEvents()]
-                        // TODO why does the whole thing stop now when the maxsp event is missing??
-                        // > because maxsp event is triggered the idle state (listen stops working)
                     },
-                    ...getDefaultStates(say("Will it take the whole day?"), "Wake up", "Was that a yes or a no?")
+                    ...getDefaultStates(say("Will it take the whole day?"),
+                        say("Is your meeting going to last the entire day?"),
+                        "I did not catch that.")
                 },
                 time: {
                     on: {
@@ -170,7 +182,9 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         ...getDefaultRecogEvents("Tell me the time of your meeting.")],
                         MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    ...getDefaultStates(say("What time is your meeting?"), "Wake up", "Sorry I did not understand that")
+                    ...getDefaultStates(say("What time is your meeting?"),
+                        say("When does your meeting start?"),
+                        "Can you repeat that?")
                 },
                 confirmDay: {
                     on: {
@@ -181,11 +195,16 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         ],
                         MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    ...getDefaultStates(send((context) => ({
-                        type: "SPEAK",
-                        value: `Do you want me to create an appointment with ${context.person} on ${context.day} for the whole day?`
-                    })),
-                        "Halloo?", "Was that a yes or a no?")
+                    ...getDefaultStates(
+                        send((context) => ({
+                            type: "SPEAK",
+                            value: `Do you want me to create an appointment with ${context.person} on ${context.day} for the whole day?`
+                        })),
+                        send((context) => ({
+                            type: "SPEAK",
+                            value: `You are meeting with ${context.person} on ${context.day} for the whole day. Is that correct?`
+                        })),
+                        "Yes or no?")
                 },
                 confirmTime: {
                     on: {
@@ -196,11 +215,16 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         ],
                         MAXSPEECH: [...getDefaultMaxSpeechEvents()]
                     },
-                    ...getDefaultStates(send((context) => ({
-                        type: "SPEAK",
-                        value: `Do you want me to create an appointment with ${context.person} on ${context.day} at ${context.time}?`
-                    })),
-                        "Halloo?", "Was that a yes or a no?")
+                    ...getDefaultStates(
+                        send((context) => ({
+                            type: "SPEAK",
+                            value: `Do you want me to create an appointment with ${context.person} on ${context.day} at ${context.time}?`
+                        })),
+                        send((context) => ({
+                            type: "SPEAK",
+                            value: `You are meeting with ${context.person} on ${context.day} at ${context.time}. Is that correct?`
+                        })),
+                        "Yes or no?")
                 },
                 final: {
                     initial: "prompt",
