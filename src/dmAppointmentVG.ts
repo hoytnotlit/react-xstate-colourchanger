@@ -1,6 +1,4 @@
-import { MachineConfig, actions, Action, assign } from "xstate";
-const { send, cancel } = actions;
-// SRGS parser and example (logs the results to console on page load)
+import { MachineConfig, actions, Action, assign, send } from "xstate";
 import { loadGrammar } from './runparser'
 import { parse } from './chartparser'
 import { grammar as grmr } from './grammars/appointmentGrammar'
@@ -33,9 +31,9 @@ function getDefaultRecogEvents(help_msg: string) {
         {
             cond: (context: SDSContext) => !!getGrammarResult(context.recResult),
             actions: assign((context: SDSContext) => {
-                console.log(getGrammarResult(context.recResult))
                 let meeting_obj = getGrammarResult(context.recResult).meeting;
-                // don't overwrite existing results (eg. user says create meeting on friday -> go to state who -> go to state time)
+                // don't overwrite existing results (eg. user says create meeting on friday 
+                //-> go to state who -> go to state time)
                 return {
                     person: context.person ? context.person : meeting_obj.person,
                     day: context.day ? context.day : meeting_obj.day,
@@ -69,18 +67,6 @@ function getDefaultMaxSpeechEvents() {
     ]
 }
 
-function getHelpAction(help_msg: string): any {
-    return assign((context) => { return { help_msg: help_msg } });
-}
-
-function getRepromptAction(): any {
-    return assign((context: SDSContext) => { return { prompts: context.prompts ? context.prompts + 1 : 1 } });
-}
-
-function getClearRepromptAction(): any {
-    return assign((context: SDSContext) => { return { prompts: 0 } });
-}
-
 function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: Action<SDSContext, SDSEvent>,
     nomatch: string): MachineConfig<SDSContext, any, SDSEvent> {
     return ({
@@ -95,46 +81,79 @@ function getDefaultStates(prompt: Action<SDSContext, SDSEvent>, reprompt: Action
                 on: { ENDSPEECH: "ask" }
             },
             ask: {
-                entry: [send('LISTEN'), /*send('MAXSPEECH', { delay: 3000, id: 'maxsp' })*/]
+                entry: [send('LISTEN'), send('MAXSPEECH', { delay: 5000, id: 'maxsp' })]
             },
             nomatch: {
                 entry: say(nomatch),
-                on: { ENDSPEECH: "ask" }
+                on: { ENDSPEECH: "reprompt" }
             }
         }
     })
 }
 
+
+// functions for getting assign-actions, my editor gives an error when the result is 
+// directly in the actions: ... part
+
+function getHelpAction(help_msg: string): any {
+    return assign((context) => { return { help_msg: help_msg } });
+}
+
+function getRepromptAction(): any {
+    return assign((context: SDSContext) => { return { prompts: context.prompts ? context.prompts + 1 : 1 } });
+}
+
+function getClearRepromptAction(): any {
+    return assign((context: SDSContext) => { return { prompts: 0 } });
+}
+
 const yesNoGrammar: { [index: string]: { person?: string, day?: string, time?: string, affirmation?: string } } = {
-    // "Anna": { person: "Anna Appleseed" },
-    // "John": { person: "John Appleseed" },
-    // "Patricia": { person: "Patricia G" },
-    // "Mary": { person: "Mary" },
-    // "Mike": { person: "Michael" },
-    // "on Friday": { day: "Friday" },
-    // "tomorrow": { day: "tomorrow" },
-    // "Monday": { day: "Monday" },
-    // "at ten": { time: "10:00" },
-    // "at 10": { time: "10:00" },
-    // "eleven": { time: "11:00" },
-    // "at noon": { time: "12:00" },
-    // "at 3": { time: "15:00" },
     "of course": { affirmation: "yes" },
     "absolutely": { affirmation: "yes" },
     "no way": { affirmation: "no" },
     "not really": { affirmation: "no" }
 }
 
-// NOTE I did not find the use of orthogonal states necessary, I did however implemeted them by adding two
-// parallel states where one states asks the user an open ended question and the other "listens" to what
-// the user might say, ready to take on an action such as creating an appointment
-// This is not the best solution.
-// I would extract the appointment-machine into its own file
+// NOTES AND COMMENTS
+
+// I did not find the use of orthogonal states necessary, I did however implemeted them for the sake
+// of this assignment by adding two parallel states where one state asks the user an open ended 
+// question and the other state "listens" to what the user might say, ready to redirect to
+// the correct state. This does not work well and the start state at the moment
+// has no real functionality. I tried adding another action (timer) and when 
+// the user enters that state, they come back to the listen-state. 
+
+// Unexpected inputs in the start.welcome-state are not handled. I tried adding a nomatch-state
+// that would tell the user the actions that can be done but this needs some condition
+// to check if the user is already in another state in the parallel state. I couldn't find a solution
+// for these issues for the moment.
+
+// To keep everything compact I kept everything in one file but I would extract the 
+// appointment-machine into its own file if there were more functionality.
+
+// example utterances that work:
+// meeting with Bob
+// create a meeting with Bob
+// create a meeting with Bob on Friday
+// create a meeting with Bob on Friday at noon
+// create a meeting with Bob at noon
+// create a meeting on Friday
+// create a meeting at noon
+
+// The same grammar is also used for questions answered in states who, day and time
+// so utterances "with Bob", "on Friday", "at noon" would work too, even though
+// this behavious is a bit illogical (Q: "what would you like to do" A: "with Bob")
+
+// Implementation of the "will it take the whole day" has not been done.
+// TODO try to do the above
+
+// I have increased the timeouts because 3 seconds was too short to wait for some answers
+
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
-    // initial: 'act',
     type: 'parallel',
     states: {
         start: {
+            id: "start",
             initial: 'init',
             states: {
                 init: {
@@ -146,9 +165,11 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     initial: "prompt",
                     on: {
                         RECOGNISED: [
+                            // NOTE in this block we could add other actions (eg timer, to do list from 
+                            // lab2) and redirect accordingly
                             { cond: (context) => context.recResult == "set timer", target: "#main.timer" },
                             { target: ".idle" }
-                            // NOTE in this block we could add other actions (eg timer, to do list from lab2) and redirect accordingly
+                            // { target: ".nomatch" }
                         ]
                     },
                     states: {
@@ -157,21 +178,25 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             on: { ENDSPEECH: "ask" }
                         },
                         ask: {
-                            entry: listen
+                            entry: listen()
+                        },
+                        nomatch: {
+                            entry: say("Currently I can only book an appointment or set a timer."),
+                            on: { ENDSPEECH: "prompt" }
                         },
                         idle: {
-                            // TODO/NOTE here I guess can be implemented a listener for stop/help/whatever
+                            // NOTE here I guess can be implemented a listener for stop/help/etc
                         },
                     }
                 },
             }
         },
-        watch: {
+        actions: {
             id: "main",
             initial: "appointment",
             states: {
                 appointment: {
-                    // initial: 'listen',
+                    id: 'appointment',
                     initial: 'init',
                     states: {
                         hist: { type: 'history', history: 'deep' },
@@ -189,19 +214,25 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         },
                         listen: {
                             on: {
-                                RECOGNISED: [{
+                                RECOGNISED: {
                                     cond: (context) => !!getGrammarResult(context.recResult),
                                     actions: assign((context) => {
-                                        console.log(getGrammarResult(context.recResult))
                                         let meeting_obj = getGrammarResult(context.recResult).meeting;
                                         return { person: meeting_obj.person, day: meeting_obj.day, time: meeting_obj.time }
                                     }),
                                     target: "redirect"
-                                },
-                                    // { target: "welcome" }
-                                ]
+                                }
                             },
                             entry: listen()
+                        },
+                        redirect: {
+                            always: [
+                                { target: 'confirmTime', cond: (context) => !!context.person && !!context.day && !!context.time },
+                                { target: 'time', cond: (context) => !!context.person && !!context.day },
+                                { target: 'day', cond: (context) => !!context.person },
+                                { target: 'who', cond: (context) => !context.person && (!!context.day || !!context.time) },
+                                { target: 'welcome' }
+                            ]
                         },
                         who: {
                             on: {
@@ -211,15 +242,6 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             ...getDefaultStates(say("Who are you meeting with?"),
                                 say("Can you tell me who you are meeting with?"),
                                 "Sorry, I don't know them.")
-                        },
-                        redirect: {
-                            always: [
-                                { target: 'confirmTime', cond: (context) => !!context.person && !!context.day && !!context.time },
-                                { target: 'time', cond: (context) => !!context.person && !!context.day },
-                                { target: 'day', cond: (context) => !!context.person },
-                                { target: 'who', cond: (context) => !context.person && (!!context.day || !!context.time) },
-                                { target: 'welcome' },
-                            ]
                         },
                         day: {
                             on: {
@@ -319,7 +341,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 },
                 timer: {
                     entry: say("I will set a timer for you."),
-                    always: ['appointment']
+                    always: 'appointment'
                 }
             }
         }

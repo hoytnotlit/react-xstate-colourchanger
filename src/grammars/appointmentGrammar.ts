@@ -9,10 +9,7 @@ export const grammar = `
     </rule>
 
     <rule id="meeting">
-        <!--TODO create meeting on Friday at noon-->
-        <!--everything is optional so the grammar can be reused -->
         <item repeat="0-1">create
-
             <item repeat="0-1">
                 <one-of>
                     <item>a</item>
@@ -24,19 +21,35 @@ export const grammar = `
                 <item>appointment</item>
             </one-of>
         </item>
-        <item repeat="0-1">with</item>
-        <ruleref uri="#person" />
-        <ruleref uri="#day" />
-        <ruleref uri="#time" />
+        <!--handle case where time is said before day-->
+        <!--NOTE you could add cases where person is said last in a similar way-->
+        <item>
+            <one-of>
+                <item>
+                    <ruleref uri="#person" />
+                    <ruleref uri="#day" />
+                    <ruleref uri="#time" />
+                </item>
+                <item>
+                    <ruleref uri="#person" />
+                    <ruleref uri="#time" />
+                    <ruleref uri="#day" />
+                </item>
+            </one-of>
+        </item>
         <tag>out.person=rules.person;out.day=rules.day;out.time=rules.time;</tag>
     </rule>
 
     <rule id="person">
         <item repeat="0-1">
+            <item repeat="0-1">with</item>
             <one-of>
-                <item>Bob</item>
-                <item>Anna</item>
-                <item>John</item>
+                <item>Bob <tag> out = "Bob the Builder"; </tag>
+                </item>
+                <item>Anna <tag> out = "Anna Appleseed"; </tag>
+                </item>
+                <item>John <tag> out = "John Appleseed"; </tag>
+                </item>
                 <item>Patricia</item>
                 <item>Mary</item>
                 <item>Mike</item>

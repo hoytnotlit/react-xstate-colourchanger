@@ -4,7 +4,7 @@ import * as ReactDOM from "react-dom";
 import { Machine, assign, actions, State } from "xstate";
 import { useMachine, asEffect } from "@xstate/react";
 import { inspect } from "@xstate/inspect";
-import { dmMachine } from "./dmAppointmentPlus";
+import { dmMachine } from "./dmAppointmentVG";
 const { send, cancel } = actions;
 
 inspect({
