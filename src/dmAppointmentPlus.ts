@@ -19,13 +19,17 @@ function resolveNo(recResult: string): boolean {
 
 function getDefaultRecogEvents(help_msg: string) {
     return [
-        { target: '#appointment.stop', cond: (context: SDSContext) => context.recResult === 'stop' },
+        // another way to implement the stop-state
+        // { target: '#appointment.stop', cond: (context: SDSContext) => context.recResult === 'stop' },
         {
             cond: (context: SDSContext) => context.recResult === 'help',
             actions: getHelpAction(help_msg),
             target: '#appointment.help'
         },
-        { target: ".nomatch" }
+        {
+            cond: (context: SDSContext) => context.recResult !== 'stop',
+            target: ".nomatch"
+        }
     ]
 }
 
@@ -108,6 +112,12 @@ const grammar: { [index: string]: { person?: string, day?: string, time?: string
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     id: 'appointment',
     initial: 'act',
+    on: {
+        RECOGNISED: {
+            target: '.stop',
+            cond: (context: SDSContext) => context.recResult === 'stop'
+        }
+    },
     states: {
         act: {
             initial: 'init',
