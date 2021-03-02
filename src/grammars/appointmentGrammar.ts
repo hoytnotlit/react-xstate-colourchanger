@@ -50,10 +50,14 @@ export const grammar = `
                 </item>
                 <item>John <tag> out = "John Appleseed"; </tag>
                 </item>
-                <item>Patricia</item>
-                <item>Mary</item>
-                <item>Mike</item>
-                <item>Bill</item>
+                <item>Patricia <tag> out = "Patricia G"; </tag>
+                </item>
+                <item>Mary <tag> out = "Mary"; </tag>
+                </item>
+                <item>Mike <tag> out = "Mike"; </tag>
+                </item>
+                <item>Bill <tag> out = "Bill"; </tag>
+                </item>
             </one-of>
         </item>
     </rule>

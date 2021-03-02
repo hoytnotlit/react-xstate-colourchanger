@@ -121,12 +121,14 @@ const yesNoGrammar: { [index: string]: { person?: string, day?: string, time?: s
 // question and the other state "listens" to what the user might say, ready to redirect to
 // the correct state. This does not work well and the start state at the moment
 // has no real functionality. I tried adding another action (timer) and when 
-// the user enters that state, they come back to the listen-state. 
+// the user enters that state, they come back to the listen-state so this did not work well.
 
 // Unexpected inputs in the start.welcome-state are not handled. I tried adding a nomatch-state
 // that would tell the user the actions that can be done but this needs some condition
 // to check if the user is already in another state in the parallel state. I couldn't find a solution
 // for these issues for the moment.
+
+// Also to add more functionality, the states listen and redirect should be outside of the appointment state
 
 // To keep everything compact I kept everything in one file but I would extract the 
 // appointment-machine into its own file if there were more functionality.
@@ -137,6 +139,7 @@ const yesNoGrammar: { [index: string]: { person?: string, day?: string, time?: s
 // create a meeting with Bob on Friday
 // create a meeting with Bob on Friday at noon
 // create a meeting with Bob at noon
+// create a meeting with Bob at noon on Friday
 // create a meeting on Friday
 // create a meeting at noon
 
