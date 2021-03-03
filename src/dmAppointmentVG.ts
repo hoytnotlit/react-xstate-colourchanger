@@ -40,7 +40,7 @@ function getDefaultRecogEvents(help_msg: string) {
                     time: context.time ? context.time : meeting_obj.time
                 }
             }),
-            target: "redirect"
+            target: "#main.redirect"
         },
         { target: '#main.stop', cond: (context: SDSContext) => context.recResult === 'stop' },
         {
@@ -62,7 +62,7 @@ function getDefaultMaxSpeechEvents() {
         {
             actions: getClearRepromptAction(),
             cond: (context: SDSContext) => context.prompts >= 3,
-            target: "init"
+            target: "#main.init"
         }
     ]
 }
@@ -116,22 +116,18 @@ const yesNoGrammar: { [index: string]: { person?: string, day?: string, time?: s
 
 // NOTES AND COMMENTS
 
-// I did not find the use of orthogonal states necessary, I did however implemeted them for the sake
-// of this assignment by adding two parallel states where one state asks the user an open ended 
+// I did not find the use of orthogonal states necessary, but I did implemeted them for the sake
+// of the assignment by adding two parallel states where one state asks the user an open ended 
 // question and the other state "listens" to what the user might say, ready to redirect to
-// the correct state. This does not work well and the start state at the moment
-// has no real functionality. I tried adding another action (timer) and when 
+// the correct state. The solution is slightly incomplete and the start state at the moment
+// has no real functionality implemented. I tried adding another action (timer) but when 
 // the user enters that state, they come back to the listen-state so this did not work well.
+// The same thing happens when stopping, the initial state is listen so the program never "stops"
 
 // Unexpected inputs in the start.welcome-state are not handled. I tried adding a nomatch-state
 // that would tell the user the actions that can be done but this needs some condition
 // to check if the user is already in another state in the parallel state. I couldn't find a solution
 // for these issues for the moment.
-
-// Also to add more functionality, the states listen and redirect should be outside of the appointment state
-
-// To keep everything compact I kept everything in one file but I would extract the 
-// appointment-machine into its own file if there were more functionality.
 
 // example utterances that work:
 // meeting with Bob
@@ -146,9 +142,6 @@ const yesNoGrammar: { [index: string]: { person?: string, day?: string, time?: s
 // The same grammar is also used for questions answered in states who, day and time
 // so utterances "with Bob", "on Friday", "at noon" would work too, even though
 // this behavious is a bit illogical (Q: "what would you like to do" A: "with Bob")
-
-// Implementation of the "will it take the whole day" has not been done.
-// TODO try to do the above
 
 // I have increased the timeouts because 3 seconds was too short to wait for some answers
 
@@ -170,7 +163,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         RECOGNISED: [
                             // NOTE in this block we could add other actions (eg timer, to do list from 
                             // lab2) and redirect accordingly
-                            { cond: (context) => context.recResult == "set timer", target: "#main.timer" },
+                            // { cond: (context) => context.recResult == "set timer", target: "#main.timer" },
                             { target: ".idle" }
                             // { target: ".nomatch" }
                         ]
@@ -196,46 +189,47 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         },
         actions: {
             id: "main",
-            initial: "appointment",
+            // initial: "appointment",
+            initial: "init",
             states: {
+                init: {
+                    on: {
+                        ENDSPEECH: 'listen'
+                    }
+                },
+                listen: {
+                    on: {
+                        RECOGNISED: {
+                            cond: (context) => !!getGrammarResult(context.recResult),
+                            actions: assign((context) => {
+                                let meeting_obj = getGrammarResult(context.recResult).meeting;
+                                return { person: meeting_obj.person, day: meeting_obj.day, time: meeting_obj.time }
+                            }),
+                            target: "redirect"
+                        }
+                    },
+                    entry: listen()
+                },
+                redirect: {
+                    always: [
+                        { target: '#appointment.confirmTime', cond: (context) => !!context.person && !!context.day && !!context.time },
+                        { target: '#appointment.duration', cond: (context) => !!context.person && !!context.day },
+                        { target: '#appointment.day', cond: (context) => !!context.person },
+                        { target: '#appointment.who', cond: (context) => !context.person && (!!context.day || !!context.time) },
+                        { target: '#appointment.welcome' }
+                    ]
+                },
                 appointment: {
                     id: 'appointment',
-                    initial: 'init',
+                    initial: 'welcome',
                     states: {
                         hist: { type: 'history', history: 'deep' },
-                        init: {
-                            on: {
-                                ENDSPEECH: 'listen'
-                            }
-                        },
                         welcome: {
                             initial: "prompt",
                             on: { ENDSPEECH: "who" },
                             states: {
                                 prompt: { entry: say("Let's create an appointment") }
                             }
-                        },
-                        listen: {
-                            on: {
-                                RECOGNISED: {
-                                    cond: (context) => !!getGrammarResult(context.recResult),
-                                    actions: assign((context) => {
-                                        let meeting_obj = getGrammarResult(context.recResult).meeting;
-                                        return { person: meeting_obj.person, day: meeting_obj.day, time: meeting_obj.time }
-                                    }),
-                                    target: "redirect"
-                                }
-                            },
-                            entry: listen()
-                        },
-                        redirect: {
-                            always: [
-                                { target: 'confirmTime', cond: (context) => !!context.person && !!context.day && !!context.time },
-                                { target: 'time', cond: (context) => !!context.person && !!context.day },
-                                { target: 'day', cond: (context) => !!context.person },
-                                { target: 'who', cond: (context) => !context.person && (!!context.day || !!context.time) },
-                                { target: 'welcome' }
-                            ]
                         },
                         who: {
                             on: {
@@ -333,7 +327,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 },
                 stop: {
                     entry: say("Ok"),
-                    always: 'appointment'
+                    always: 'init'
                 },
                 help: {
                     entry: send((context) => ({
@@ -344,7 +338,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 },
                 timer: {
                     entry: say("I will set a timer for you."),
-                    always: 'appointment'
+                    always: 'init'
                 }
             }
         }
